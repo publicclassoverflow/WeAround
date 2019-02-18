@@ -13,6 +13,7 @@ import (
 	"github.com/olivere/elastic"
 	"github.com/pborman/uuid"
 
+	"cloud.google.com/go/bigtable"
 	"cloud.google.com/go/storage"
 )
 
@@ -26,6 +27,10 @@ const (
 
 	// GCS Bucket
 	BUCKET_NAME = "wearound-post-images"
+
+	// BigTable
+	BIGTABLE_PROJECT_ID = "wearound"
+	BT_INSTANCE         = "wearound-post-01"
 )
 
 type Location struct {
@@ -126,7 +131,16 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Failed to save post to ElasticSearch %v.\n", err)
 		return
 	}
-	fmt.Printf("Saved one post to ElasticSearch: %s", p.Message)
+	fmt.Printf("Saved one post to ElasticSearch: %s\n", p.Message)
+
+	// Save the post to BigTable
+	err = saveToBigTable(p, id)
+	if err != nil {
+		http.Error(w, "Failed to save post to BigTable", http.StatusInternalServerError)
+		fmt.Printf("Failed to save post to BigTable %v.\n", err)
+		return
+	}
+	fmt.Printf("Saved one post to BigTable: %s\n", p.Message)
 }
 
 func handlerSearch(w http.ResponseWriter, r *http.Request) {
@@ -254,4 +268,27 @@ func saveToGCS(r io.Reader, bucketName, objectName string) (*storage.ObjectAttrs
 
 	fmt.Printf("Image is saved to GCS: %s\n", attrs.MediaLink)
 	return attrs, nil
+}
+
+func saveToBigTable(p *Post, id string) error {
+	ctx := context.Background()
+	btClient, err := bigtable.NewClient(ctx, BIGTABLE_PROJECT_ID, BT_INSTANCE)
+	if err != nil {
+		return err
+	}
+
+	tbl := btClient.Open("post")
+	mut := bigtable.NewMutation()
+	t := bigtable.Now()
+	mut.Set("post", "user", t, []byte(p.User))
+	mut.Set("post", "message", t, []byte(p.Message))
+	mut.Set("location", "lat", t, []byte(strconv.FormatFloat(p.Location.Lat, 'f', -1, 64)))
+	mut.Set("location", "lon", t, []byte(strconv.FormatFloat(p.Location.Lon, 'f', -1, 64)))
+
+	err = tbl.Apply(ctx, id, mut)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Post is saved to BigTable: %s\n", p.Message)
+	return nil
 }
