@@ -133,14 +133,17 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Printf("Saved one post to ElasticSearch: %s\n", p.Message)
 
-	// Save the post to BigTable
-	err = saveToBigTable(p, id)
-	if err != nil {
-		http.Error(w, "Failed to save post to BigTable", http.StatusInternalServerError)
-		fmt.Printf("Failed to save post to BigTable %v.\n", err)
-		return
-	}
-	fmt.Printf("Saved one post to BigTable: %s\n", p.Message)
+	// Skip using Bigtable to save some money...
+	/*
+		// Save the post to BigTable
+		err = saveToBigtable(p, id)
+		if err != nil {
+			http.Error(w, "Failed to save post to Bigtable", http.StatusInternalServerError)
+			fmt.Printf("Failed to save post to Bigtable %v.\n", err)
+			return
+		}
+		fmt.Printf("Saved one post to Bigtable: %s\n", p.Message)
+	*/
 }
 
 func handlerSearch(w http.ResponseWriter, r *http.Request) {
@@ -270,7 +273,7 @@ func saveToGCS(r io.Reader, bucketName, objectName string) (*storage.ObjectAttrs
 	return attrs, nil
 }
 
-func saveToBigTable(p *Post, id string) error {
+func saveToBigtable(p *Post, id string) error {
 	ctx := context.Background()
 	btClient, err := bigtable.NewClient(ctx, BIGTABLE_PROJECT_ID, BT_INSTANCE)
 	if err != nil {
@@ -289,6 +292,6 @@ func saveToBigTable(p *Post, id string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Post is saved to BigTable: %s\n", p.Message)
+	fmt.Printf("Post is saved to Bigtable: %s\n", p.Message)
 	return nil
 }
