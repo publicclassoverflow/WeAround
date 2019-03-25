@@ -22,59 +22,58 @@ import java.util.List;
 
 public class PostDumpFlow {
 
-    private static final String PROJECT_ID = "wearound";
-    private static final String INSTANCE_ID = "wearound-post-01";
-    private static final Charset UTF8_CHARSET = Charset.forName("UTF-8");
+  private static final String PROJECT_ID = "wearound";
+  private static final String INSTANCE_ID = "wearound-post-01";
+  private static final Charset UTF8_CHARSET = Charset.forName("UTF-8");
 
-    public static void main(String[] args) {
-        // Start by defining the options for the pipeline.
-        PipelineOptions options = PipelineOptionsFactory.fromArgs(args).create();
+  public static void main(String[] args) {
+    // Start by defining the options for the pipeline.
+    PipelineOptions options = PipelineOptionsFactory.fromArgs(args).create();
 
-        Pipeline p = Pipeline.create(options);
+    Pipeline p = Pipeline.create(options);
 
-        // Configure Bigtable
-        CloudBigtableScanConfiguration config = new CloudBigtableScanConfiguration.Builder().withProjectId(PROJECT_ID)
-                .withInstanceId(INSTANCE_ID).withTableId("post").build();
+    // Configure Bigtable
+    CloudBigtableScanConfiguration config = new CloudBigtableScanConfiguration.Builder().withProjectId(PROJECT_ID)
+        .withInstanceId(INSTANCE_ID).withTableId("post").build();
 
-        // Read rows from Bigtable
-        PCollection<Result> btRows = p.apply(Read.from(CloudBigtableIO.read(config)));
-        // Transfer each row of data in Bigtable into BigQuery
-        PCollection<TableRow> bqRows = btRows.apply(ParDo.of(new DoFn<Result, TableRow>() {
-            @Override
-            public void processElement(ProcessContext c) {
-                Result result = c.element();
-                String postId = new String(result.getRow());
-                String user = new String(result.getValue(Bytes.toBytes("post"), Bytes.toBytes("user")), UTF8_CHARSET);
-                String message = new String(result.getValue(Bytes.toBytes("post"), Bytes.toBytes("message")),
-                        UTF8_CHARSET);
-                String lat = new String(result.getValue(Bytes.toBytes("location"), Bytes.toBytes("lat")), UTF8_CHARSET);
-                String lon = new String(result.getValue(Bytes.toBytes("location"), Bytes.toBytes("lon")), UTF8_CHARSET);
+    // Read rows from Bigtable
+    PCollection<Result> btRows = p.apply(Read.from(CloudBigtableIO.read(config)));
+    // Transfer each row of data in Bigtable into BigQuery
+    PCollection<TableRow> bqRows = btRows.apply(ParDo.of(new DoFn<Result, TableRow>() {
+      @Override
+      public void processElement(ProcessContext c) {
+        Result result = c.element();
+        String postId = new String(result.getRow());
+        String user = new String(result.getValue(Bytes.toBytes("post"), Bytes.toBytes("user")), UTF8_CHARSET);
+        String message = new String(result.getValue(Bytes.toBytes("post"), Bytes.toBytes("message")), UTF8_CHARSET);
+        String lat = new String(result.getValue(Bytes.toBytes("location"), Bytes.toBytes("lat")), UTF8_CHARSET);
+        String lon = new String(result.getValue(Bytes.toBytes("location"), Bytes.toBytes("lon")), UTF8_CHARSET);
 
-                // Create a BigQuery row object
-                TableRow row = new TableRow();
-                row.set("postId", postId);
-                row.set("user", user);
-                row.set("message", message);
-                row.set("lat", Double.parseDouble(lat));
-                row.set("lon", Double.parseDouble(lon));
-                c.output(row);
-            }
-        }));
+        // Create a BigQuery row object
+        TableRow row = new TableRow();
+        row.set("postId", postId);
+        row.set("user", user);
+        row.set("message", message);
+        row.set("lat", Double.parseDouble(lat));
+        row.set("lon", Double.parseDouble(lon));
+        c.output(row);
+      }
+    }));
 
-        // Create a schema with specified columns
-        List<TableFieldSchema> fields = new ArrayList<>();
-        fields.add(new TableFieldSchema().setName("postId").setType("STRING"));
-        fields.add(new TableFieldSchema().setName("user").setType("STRING"));
-        fields.add(new TableFieldSchema().setName("message").setType("STRING"));
-        fields.add(new TableFieldSchema().setName("lat").setType("FLOAT"));
-        fields.add(new TableFieldSchema().setName("lon").setType("FLOAT"));
+    // Create a schema with specified columns
+    List<TableFieldSchema> fields = new ArrayList<>();
+    fields.add(new TableFieldSchema().setName("postId").setType("STRING"));
+    fields.add(new TableFieldSchema().setName("user").setType("STRING"));
+    fields.add(new TableFieldSchema().setName("message").setType("STRING"));
+    fields.add(new TableFieldSchema().setName("lat").setType("FLOAT"));
+    fields.add(new TableFieldSchema().setName("lon").setType("FLOAT"));
 
-        TableSchema schema = new TableSchema().setFields(fields);
-        bqRows.apply(BigQueryIO.Write.named("Write").to(PROJECT_ID + ":" + "post_analysis" + "." + "daily_dump_1")
-                .withSchema(schema).withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_TRUNCATE)
-                .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED));
+    TableSchema schema = new TableSchema().setFields(fields);
+    bqRows.apply(BigQueryIO.Write.named("Write").to(PROJECT_ID + ":" + "post_analysis" + "." + "daily_dump_1")
+        .withSchema(schema).withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_TRUNCATE)
+        .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED));
 
-        // Ready to run the pipeline
-        p.run();
-    }
+    // Ready to run the pipeline
+    p.run();
+  }
 }
